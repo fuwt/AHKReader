@@ -1,0 +1,33 @@
+svg,a,img{
+  display: inline-block;
+}
+
+svg,img{
+  height: 30px;
+  width: 30px;
+  vertical-align:middle;
+  margin-left: 5px;
+}
+
+a{
+  line-height: 50px;
+  font-weight: 700;
+  width: 160px;
+}
+
+div>div{
+  border-bottom: solid 1px #A9A9A9;
+}
+
+div>div:hover{
+  background-color: #00aaff;
+
+}
+
+.top {
+  background-color: #d6f3fd;
+}
+
+* {
+  white-space:nowrap;
+}
