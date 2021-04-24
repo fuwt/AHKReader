@@ -1,6 +1,30 @@
 ﻿; AHK VSERION: AutoHotkey_2.0-a129-78d2aa15 U32
 ; Author: fwt
 #SingleInstance force
+; TEST: 保存快照
+; f1::
+; {
+;   html := FileRead(".\UI.html")
+;   body := WebView.document.body.innerHTML
+;   html := RegExReplace(html, "s)(<body.*?>).*(<\/body>)", "$1" body "$2")
+;   fileobj := FileOpen("c:\Users\chnfw\Desktop\Reader\UI.html", "w")
+;   fileobj.write(html)
+;   fileobj.close()
+
+;   html := FileRead(".\static\frame1.html")
+;   body := f1.contentDocument.body.innerHTML
+;   html := RegExReplace(html, "s)(<body.*?>).*(<\/body>)", "$1" body "$2")
+;   fileobj := FileOpen("c:\Users\chnfw\Desktop\Reader\Static\frame1.html", "w")
+;   fileobj.write(html)
+;   fileobj.close()
+
+;   html := FileRead(".\static\frame2.html")
+;   body := f2.contentDocument.body.innerHTML
+;   html := RegExReplace(html, "s)(<body.*?>).*(<\/body>)", "$1" body "$2")
+;   fileobj := FileOpen("c:\Users\chnfw\Desktop\Reader\Static\frame2.html", "w")
+;   fileobj.write(html)
+;   fileobj.close()
+; }
 
 ; {{{ 初始化
 tempDir := A_Temp . "\AHKReader"
@@ -11,7 +35,7 @@ MainWin := Gui("-Caption +LastFound -DPIScale","Reader")
 MainWin.marginX := 0, MainWin.marginY := 0
 MainWin.BackColor := "EEAA99"
 WinSetTransColor("EEAA99", MainWin)
-contentCtrl := MainWin.Add("ActiveX", "-E0x200 x402 y30 w1298 h766", "Shell.Explorer")
+contentCtrl := MainWin.Add("ActiveX", "-E0x200 x404 y30 w1298 h766", "Shell.Explorer")
 contentVeiw := contentCtrl.value
 contentVeiw.Silent := True
 contentVeiw.Navigate(Format("file:///{:s}/static/readme.html", A_ScriptDir))
@@ -19,13 +43,15 @@ WebViewCtrl := MainWin.Add("ActiveX", "-E0x200 w1700 h800 x0 y0", "Shell.Explore
 WebView := WebViewCtrl.Value
 WebView.Silent := True
 WebView.Navigate(Format("file:///{:s}/UI.html", A_ScriptDir))
+testView := MainWin.Add("ActiveX", "-E0x200 x0 y0 w0 h0", "Shell.Explorer").Value
+testView.Navigate("about:blank")
 MainWin.onEvent("Size", resize)
 MainWin.Show("")
 
 resize(o, minmax, w, h){ ; {{{ 自适应大小
   global WebViewCtrl, contentCtrl
   WebViewCtrl.move(0,0,w,h)
-  contentCtrl.move(,,w-403, h-31)
+  contentCtrl.move(,,w-404, h-31)
 } ; }}}
 
 
@@ -144,17 +170,66 @@ WB_BeforeNavigate2(pDisp, &url, &Flags, &TargetFrameName, &PostData, &Headers, &
 
 getlist(document1, document2, url, source, selector, script := ""){ ; {{{ 拉取数据函数。 TODO：查重，保存
   document1.parentWindow.jQuery(format("#{} > a > i", source)).show()
-  ie := ComObjCreate("InternetExplorer.Application")
-  ie.Navigate(url)
-  ; ie.visible := true
-  ; 事件不太稳定
-  ; ComObjConnect(ie, "IE_")
-  ; ie.PutProperty("ahkslector", selector)
-  ; ie.PutProperty("ahkid", r.2)
-  SetTimer(readyStateCallback.bind(ie, document1, document2, selector, source, script, 0), -1000)
+  method := IniRead("AHKReader.ini", source, "method", "xmlhttp")
+  if(method = "xmlhttp"){
+    xmlHttpGet(document1, document2, url, source, selector, script := "")
+  }
+  else if(method = "ie"){
+    ieGet(document1, document2, url, source, selector, script := "")
+  }
+  else{
+    MsgBox "method 请使用 ie 或 xmlhttp 或 留空"
+    document1.parentWindow.jQuery(format("#{} > a > i", source)).hide()
+    return
+  }
 } ; }}}
 
-readyStateCallback(ie, document1, document2, selector, source, script, count){ ; {{{ 异步判断ReadyState并获取内容
+xmlHttpGet(document1, document2, url, source, selector, script := ""){
+  static req := ComObjCreate("Msxml2.XMLHTTP.6.0")
+  req.open("GET", url, true)
+  req.setRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36 Edg/85.0.564.67")
+  req.setRequestHeader("Accept", "text/html")
+  req.onreadystatechange := xmlHttpReady.bind(req, url,document1, document2, selector, source, script)
+  req.send()
+}
+
+ieGet(document1, document2, url, source, selector, script := ""){
+  ie := ComObjCreate("InternetExplorer.Application")
+  ; ie.Visible := True
+  ie.Navigate(url)
+  SetTimer(ieReady.bind(ie, document1, document2, selector, source, script, 0), -1000)
+}
+
+xmlHttpReady(req, url,document1, document2, selector, source, script) {
+    Critical
+    global testView
+    if (req.readyState != 4)
+      return
+    if (req.status == 200)
+    {
+      try{
+        text := req.responseText
+        pos := RegExMatch(text, "s)<body.*?>(.*)<\/body>", &m)
+        html := m.1
+        document := testView.document
+        document.body.innerHTML := html
+        getHrefList(document, document1, document2, selector, source, script)
+      }
+      catch e{
+        MsgBox format("Source: {} 无法请求到网页内容"
+        . "`n将使用 InternetExplorer.Application 重新尝试."
+        . "`n建议在配置文件中修改默认请求方式。", source)
+        ieGet(document1, document2, url, source, selector, script := "")
+      }
+    } else {
+      MsgBox format("Source: {}  Status={}"
+        . "`n将使用 InternetExplorer.Application 重新尝试."
+        . "`n建议在配置文件中修改默认请求方式。", source, req.status)
+        ieGet(document1, document2, url, source, selector, script := "")
+    }
+}
+
+ieReady(ie, document1, document2, selector, source, script, count){ ; {{{ 异步判断ReadyState并获取内容
   if count > 10{ ; 超时10秒退出
     document1.parentWindow.jQuery(format("#{} > a > i", source)).hide()
     ie.quit()
@@ -164,35 +239,40 @@ readyStateCallback(ie, document1, document2, selector, source, script, count){ ;
   global articleHistory
   if(ie.ReadyState = 4){
     document := ie.document
-    installjQuery(document)
-    if(script = ""){
-      script := Format("var selector='{:s}';", selector)
-      . FileRead("Static\js\default.js")
-    } else{
-      script := FileRead("Static\js\" . script)
-    }
-    script .= ";"
-    . format("$('#vkZBvUweQk > a').attr('owner', '{}');", source)
-    . format("$('#vkZBvUweQk > a').attr('date', '{}');", SubStr(A_Now, 1, 8))   
-    . "$('#vkZBvUweQk > a').attr('onclick', 'onclickCallback(this)');"
-    runJS(document, script, "vkZBvUweQk")
-    html := document.getElementById("vkZBvUweQk").innerHTML
-
-    jQuery := document2.parentWindow.jQuery
-    links := document.getElementById("vkZBvUweQk").getElementsByTagName("a")
-    loop links.length
-    {
-      link := links.item(A_Index - 1) 
-      if(!articleHistory[source].has(link.href))
-        jQuery("div#" . source).prepend(link.outerHTML)
-    }
-    document1.parentWindow.jQuery(format("#{} > a > i", source)).hide()
+    getHrefList(document, document1, document2, selector, source, script)
     ie.quit()
   }
   else{
-    SetTimer(readyStateCallback.bind(ie, document1, document2, selector, source, script, count + 1), -1000)
+    SetTimer(ieReady.bind(ie, document1, document2, selector, source, script, count + 1), -1000)
   }
 } ; }}}
+
+
+getHrefList(document, document1, document2, selector, source, script){
+  installjQuery(document)
+  if(script = ""){
+    script := Format("var selector='{:s}';", selector)
+    . FileRead("Static\js\default.js")
+  } else{
+    script := FileRead("Static\js\" . script)
+  }
+  script .= ";"
+  . format("$('#vkZBvUweQk > a').attr('owner', '{}');", source)
+  . format("$('#vkZBvUweQk > a').attr('date', '{}');", SubStr(A_Now, 1, 8))   
+  . "$('#vkZBvUweQk > a').attr('onclick', 'onclickCallback(this)');"
+  runJS(document, script, "vkZBvUweQk")
+  html := document.getElementById("vkZBvUweQk").innerHTML
+
+  jQuery := document2.parentWindow.jQuery
+  links := document.getElementById("vkZBvUweQk").getElementsByTagName("a")
+  loop links.length
+  {
+    link := links.item(A_Index - 1) 
+    if(!articleHistory[source].has(link.href))
+      jQuery("div#" . source).prepend(link.outerHTML)
+  }
+  document1.parentWindow.jQuery(format("#{} > a > i", source)).hide()
+}
 
 installjQuery(document){ ; {{{ 安装jQuery脚本
   static jQuerymini := FileRead("Static\js\jquery.min.js")

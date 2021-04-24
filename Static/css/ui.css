@@ -52,18 +52,6 @@ body {
 }
 
 
-.container{
-  display: inline-block;
-  position: absolute;
-  top: 30px;
-  bottom:1px;
-  background-color: #FAFAFA;
-  font-family: Verdana, Geneva, sans-serif;
-  border-right: solid 1px #AAAAAA;
-  border-left: solid 1px #AAAAAA;
-}
-
-
 #c1 {
   left:1px;
   width: 200px;
@@ -72,6 +60,16 @@ body {
 #c2 {
   left:203px;
   width: 200px;
+}
+
+.container{
+  display: inline-block;
+  position: absolute;
+  top: 30px;
+  bottom:1px;
+  background-color: #FAFAFA;
+  font-family: Verdana, Geneva, sans-serif;
+  overflow:hidden;
 }
 
 
